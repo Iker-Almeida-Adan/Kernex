@@ -874,7 +874,7 @@ function renderToday(){
       </div>
       <div style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:14px 20px;width:100%;text-align:left;">
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;letter-spacing:.05em;">TUS RÉCORDS</div>
-        '+(Object.entries(prs).slice(0,4).map(([n,p])=>`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;"><span style="color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;">${n}</span><span style="color:var(--accent);font-weight:700;">${p.weight}kg</span></div>`).join(''))+'
+        '+(Object.entries(prs).slice(0,4).map(function(e){return '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;"><span style="color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;">'+e[0]+'</span><span style="color:var(--accent);font-weight:700;">'+e[1].weight+'kg</span></div>';}).join(''))+'
         '+(!Object.keys(prs).length?'<div style="font-size:12px;color:var(--muted);">Aún sin récords — ¡a entrenar!</div>':'')+'
       </div>
     </div>';
@@ -1128,8 +1128,8 @@ function renderCatalog(){
     const item=document.createElement('div');item.className='ci'+(inR?' inr':'');
     const muscP=ex.muscles?ex.muscles.primary.map(m=>`<span class="mt p">${m}</span>`).join(''):'';
     const muscS=ex.muscles?ex.muscles.secondary.map(m=>`<span class="mt">${m}</span>`).join(''):'';
-    const stepsH=ex.steps?ex.steps.map(s=>`<li>${s}</li>`).join(''):'';
-    const errH=ex.errors?ex.errors.map(e=>`<li style="color:var(--danger);">${e}</li>`).join(''):'';
+    const stepsH=ex.steps?ex.steps.map(function(s){return '<li>'+s+'</li>';}).join(''):'';
+    const errH=ex.errors?ex.errors.map(function(e){return '<li style="color:var(--danger);">'+e+'</li>';}).join(''):'';
     item.innerHTML='
       <div class="ci-top">
         <div class="ci-ico">'+(ex.icon)+'</div>
@@ -1437,7 +1437,7 @@ function updateChart(){
   const finalW=useActual?actualWeights.map((v,i)=>v||weights[i]):weights;
   drawChart('weight-chart',finalW,'#e8ff47');
   const leg=document.getElementById('chart-leg');
-  if(leg) leg.innerHTML='<span>'+(entries.length)+' sesiones</span>'+(baseW?`<span>Actual: <b style="color:var(--accent)">${baseW}kg</b></span>`:'')+(prs[exName]?`<span>🏆 PR: ${prs[exName].weight}kg</span>`:'');
+  if(leg) leg.innerHTML='<span>'+(entries.length)+' sesiones</span>'+(baseW?'<span>Actual: <b style="color:var(--accent)">'+baseW+'kg</b></span>':'')+(prs[exName]?'<span>🏆 PR: '+prs[exName].weight+'kg</span>':'');
 }
 
 // ═══════════════ ANÁLISIS ═══════════════
@@ -1501,7 +1501,7 @@ function renderAlgo(){
   const prList=Object.entries(prs);
   if(prList.length){
     let prH=prList.map(([n,p])=>{const ex=CATALOG.find(e=>e.name===n);return '<div class="ai"><div class="ai-ico">'+(ex?ex.icon:'💪')+'</div><div class="ai-inf"><div class="ai-n">'+(n)+'</div><div class="ai-s">'+(p.date)+'</div></div><div class="ai-v" style="color:var(--accent);">'+(p.weight)+'kg</div></div>';}).join('');
-    mk('🏆','Récords personales','Tus mejores marcas históricas','bg',`${prList.length} PRs`,prH);
+    mk('🏆','Récords personales','Tus mejores marcas históricas','bg',prList.length+' PRs',prH);
   }
 }
 
