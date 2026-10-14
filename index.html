@@ -750,7 +750,7 @@ function addXP(pts,ach){
   xp.total+=pts;
   if(ach&&!xp.achievements.includes(ach)) xp.achievements.push(ach);
   sv('kx6_xp',xp);
-  if(ach) _saveXP();
+  if(ach)_saveXP();
 }
 function checkAchs(){
   const s=calcStreak();
@@ -789,68 +789,27 @@ function showPRToast(){
 }
 
 
-// ═══ SUPABASE ═══
-const _SU='https://cbfxvotbouaaxoklkqnw.supabase.co';
-const _SK='sb_publishable_oD48ADO4PxzXLqlKGkpGog_Aca7jB-V';
-async function _req(m,t,b,f){
-  try{
-    const r=await fetch(_SU+'/rest/v1/'+t+(f||''),{
-      method:m,
-      headers:{'apikey':_SK,'Authorization':'Bearer '+_SK,'Content-Type':'application/json','Prefer':'return=representation'},
-      body:b?JSON.stringify(b):undefined
-    });
-    const tx=await r.text();return tx?JSON.parse(tx):null;
-  }catch(e){return null;}
+// SUPABASE
+var _SU='https://cbfxvotbouaaxoklkqnw.supabase.co';
+var _SK='sb_publishable_oD48ADO4PxzXLqlKGkpGog_Aca7jB-V';
+function _req(m,t,b,f){
+  return fetch(_SU+'/rest/v1/'+t+(f||''),{method:m,headers:{'apikey':_SK,'Authorization':'Bearer '+_SK,'Content-Type':'application/json','Prefer':'return=representation'},body:b?JSON.stringify(b):undefined}).then(function(r){return r.text();}).then(function(tx){return tx?JSON.parse(tx):null;}).catch(function(){return null;});
 }
-async function _load(){
-  try{
-    const[r,h,p,x]=await Promise.all([
-      _req('GET','kernex_routine',null,'?user_id=eq.iker&order=updated_at.desc&limit=1'),
-      _req('GET','kernex_history',null,'?user_id=eq.iker&order=created_at.desc&limit=90'),
-      _req('GET','kernex_prs',null,'?user_id=eq.iker'),
-      _req('GET','kernex_xp',null,'?user_id=eq.iker&limit=1')
-    ]);
+function _load(){
+  return Promise.all([_req('GET','kernex_routine',null,'?user_id=eq.iker&order=updated_at.desc&limit=1'),_req('GET','kernex_history',null,'?user_id=eq.iker&order=created_at.desc&limit=90'),_req('GET','kernex_prs',null,'?user_id=eq.iker'),_req('GET','kernex_xp',null,'?user_id=eq.iker&limit=1')]).then(function(res){
+    var r=res[0],h=res[1],p=res[2],x=res[3];
     if(r&&r.length)routine=r[0].data;
     if(h&&h.length)history=h.map(function(row){return{dateISO:row.date_iso,date:row.date,type:row.type,label:row.label,volume:row.volume,durMins:row.dur_mins,exercises:row.exercises||[]};});
     if(p&&p.length)p.forEach(function(row){prs[row.exercise_name]={weight:row.weight,reps:row.reps,date:row.date};});
     if(x&&x.length)xp={total:x[0].total||0,achievements:x[0].achievements||[],moreCount:x[0].more_count||0,sessions:x[0].sessions||0,prCount:x[0].pr_count||0};
     _sync(true);
-  }catch(e){_sync(false);}
+  }).catch(function(){_sync(false);});
 }
-async function _saveRoutine(){
-  try{
-    const ex=await _req('GET','kernex_routine',null,'?user_id=eq.iker&limit=1');
-    if(ex&&ex.length)await _req('PATCH','kernex_routine',{data:routine,updated_at:new Date().toISOString()},'?user_id=eq.iker');
-    else await _req('POST','kernex_routine',{user_id:'iker',data:routine});
-    _sync(true);
-  }catch(e){_sync(false);}
-}
-async function _saveSession(entry){
-  try{
-    const ex=await _req('GET','kernex_history',null,'?user_id=eq.iker&date_iso=eq.'+entry.dateISO+'&limit=1');
-    if(ex&&ex.length)return;
-    await _req('POST','kernex_history',{user_id:'iker',date_iso:entry.dateISO,date:entry.date,type:entry.type,label:entry.label,volume:entry.volume,dur_mins:entry.durMins,exercises:entry.exercises});
-    _sync(true);
-  }catch(e){}
-}
-async function _savePR(name,data){
-  try{
-    const ex=await _req('GET','kernex_prs',null,'?user_id=eq.iker&exercise_name=eq.'+encodeURIComponent(name)+'&limit=1');
-    if(ex&&ex.length)await _req('PATCH','kernex_prs',{weight:data.weight,reps:data.reps,date:data.date,updated_at:new Date().toISOString()},'?user_id=eq.iker&exercise_name=eq.'+encodeURIComponent(name));
-    else await _req('POST','kernex_prs',{user_id:'iker',exercise_name:name,weight:data.weight,reps:data.reps,date:data.date});
-  }catch(e){}
-}
-async function _saveXP(){
-  try{
-    const ex=await _req('GET','kernex_xp',null,'?user_id=eq.iker&limit=1');
-    if(ex&&ex.length)await _req('PATCH','kernex_xp',{total:xp.total,achievements:xp.achievements,more_count:xp.moreCount,sessions:xp.sessions,pr_count:xp.prCount,updated_at:new Date().toISOString()},'?user_id=eq.iker');
-    else await _req('POST','kernex_xp',{user_id:'iker',total:xp.total,achievements:xp.achievements,more_count:xp.moreCount,sessions:xp.sessions,pr_count:xp.prCount});
-  }catch(e){}
-}
-function _sync(ok){
-  var el=document.getElementById('sync-dot');
-  if(el)el.style.background=ok?'#22c55e':'#ef4444';
-}
+function _saveRoutine(){_req('GET','kernex_routine',null,'?user_id=eq.iker&limit=1').then(function(ex){if(ex&&ex.length)return _req('PATCH','kernex_routine',{data:routine,updated_at:new Date().toISOString()},'?user_id=eq.iker');return _req('POST','kernex_routine',{user_id:'iker',data:routine});}).then(function(){_sync(true);}).catch(function(){_sync(false);});}
+function _saveSession(entry){_req('GET','kernex_history',null,'?user_id=eq.iker&date_iso=eq.'+entry.dateISO+'&limit=1').then(function(ex){if(ex&&ex.length)return;return _req('POST','kernex_history',{user_id:'iker',date_iso:entry.dateISO,date:entry.date,type:entry.type,label:entry.label,volume:entry.volume,dur_mins:entry.durMins,exercises:entry.exercises});}).catch(function(){});}
+function _savePR(name,data){_req('GET','kernex_prs',null,'?user_id=eq.iker&exercise_name=eq.'+encodeURIComponent(name)+'&limit=1').then(function(ex){if(ex&&ex.length)return _req('PATCH','kernex_prs',{weight:data.weight,reps:data.reps,date:data.date,updated_at:new Date().toISOString()},'?user_id=eq.iker&exercise_name=eq.'+encodeURIComponent(name));return _req('POST','kernex_prs',{user_id:'iker',exercise_name:name,weight:data.weight,reps:data.reps,date:data.date});}).catch(function(){});}
+function _saveXP(){_req('GET','kernex_xp',null,'?user_id=eq.iker&limit=1').then(function(ex){if(ex&&ex.length)return _req('PATCH','kernex_xp',{total:xp.total,achievements:xp.achievements,more_count:xp.moreCount,sessions:xp.sessions,pr_count:xp.prCount,updated_at:new Date().toISOString()},'?user_id=eq.iker');return _req('POST','kernex_xp',{user_id:'iker',total:xp.total,achievements:xp.achievements,more_count:xp.moreCount,sessions:xp.sessions,pr_count:xp.prCount});}).catch(function(){});}
+function _sync(ok){var el=document.getElementById('sync-dot');if(el)el.style.background=ok?'#22c55e':'#ef4444';}
 
 // ═══════════════ TIMER ═══════════════
 function timerShow(){
@@ -904,21 +863,21 @@ function renderToday(){
   cont.innerHTML='';
   if(!dayInfo){
     const lv=getLevel();
-    cont.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 32px;text-align:center;gap:12px;">
+    cont.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 32px;text-align:center;gap:12px;">
       <div style="font-size:52px;">😴</div>
       <div style="font-size:22px;font-weight:700;color:var(--muted);">Día de descanso</div>
       <div style="font-size:13px;color:var(--muted);line-height:1.7;">Recupera bien.<br>Vuelves mañana más fuerte.</div>
       <div style="margin-top:12px;background:var(--card);border:0.5px solid var(--border);border-radius:16px;padding:16px 28px;text-align:center;">
         <div style="font-size:11px;color:var(--muted);margin-bottom:5px;letter-spacing:.06em;">TU NIVEL</div>
-        <div style="font-size:26px;font-weight:800;color:var(--accent);">${lv.icon} ${lv.name}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:3px;">${lv.xp} XP acumulados</div>
+        <div style="font-size:26px;font-weight:800;color:var(--accent);">'+(lv.icon)+' '+(lv.name)+'</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px;">'+(lv.xp)+' XP acumulados</div>
       </div>
       <div style="background:var(--card);border:0.5px solid var(--border);border-radius:14px;padding:14px 20px;width:100%;text-align:left;">
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;letter-spacing:.05em;">TUS RÉCORDS</div>
-        ${Object.entries(prs).slice(0,4).map(([n,p])=>`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;"><span style="color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;">${n}</span><span style="color:var(--accent);font-weight:700;">${p.weight}kg</span></div>`).join('')}
-        ${!Object.keys(prs).length?'<div style="font-size:12px;color:var(--muted);">Aún sin récords — ¡a entrenar!</div>':''}
+        '+(Object.entries(prs).slice(0,4).map(([n,p])=>`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;"><span style="color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;">${n}</span><span style="color:var(--accent);font-weight:700;">${p.weight}kg</span></div>`).join(''))+'
+        '+(!Object.keys(prs).length?'<div style="font-size:12px;color:var(--muted);">Aún sin récords — ¡a entrenar!</div>':'')+'
       </div>
-    </div>`;
+    </div>';
     return;
   }
 
@@ -935,16 +894,16 @@ function renderToday(){
   // Hero banner
   const hero=document.createElement('div');hero.className='today-hero '+dayInfo.type;
   const durMins=sessionStart?Math.round((Date.now()-sessionStart)/60000):0;
-  hero.innerHTML=`
+  hero.innerHTML='
     <div class="hero-eye">ENTRENAMIENTO DE HOY</div>
-    <div class="hero-title">${dayInfo.type.toUpperCase()}</div>
-    <div class="hero-sub">${typeLabels[dayInfo.type]||''}</div>
+    <div class="hero-title">'+(dayInfo.type.toUpperCase())+'</div>
+    <div class="hero-sub">'+(typeLabels[dayInfo.type]||'')+'</div>
     <div class="hero-chips">
       <div class="chip chip-abs">⚡ ABS 3×25</div>
-      ${streak>1?`<div class="chip chip-streak">🔥 ${streak} días</div>`:''}
-      ${durMins>0?`<div class="chip chip-dur">⏱ ${durMins}min</div>`:''}
+      '+(streak>1?`<div class="chip chip-streak">🔥 ${streak} días</div>`:'')+'
+      '+(durMins>0?`<div class="chip chip-dur">⏱ ${durMins}min</div>`:'')+'
       <div class="chip chip-timer" onclick="timerShow()">⏸ Descanso</div>
-    </div>`;
+    </div>';
   cont.appendChild(hero);
 
   // XP mini
@@ -952,7 +911,7 @@ function renderToday(){
   const lvNm=lv.next?lv.next.min:lv.xp+1;
   const xpPct=Math.min(100,Math.round(((lv.xp-lvPm)/(lvNm-lvPm))*100));
   const xpMini=document.createElement('div');xpMini.className='xp-mini';
-  xpMini.innerHTML=`<div class="xp-mini-row"><div class="xp-lv">${lv.icon} ${lv.name} · Nv.${lv.level}</div><div class="xp-pts">${lv.xp} XP</div></div><div class="xp-bar"><div class="xp-bar-f" style="width:${xpPct}%"></div></div><div class="xp-hint">${lv.next?`${lvNm-lv.xp} XP para ${lv.next.name}`:'Nivel máximo alcanzado'}</div>`;
+  xpMini.innerHTML='<div class="xp-mini-row"><div class="xp-lv">'+(lv.icon)+' '+(lv.name)+' · Nv.'+(lv.level)+'</div><div class="xp-pts">'+(lv.xp)+' XP</div></div><div class="xp-bar"><div class="xp-bar-f" style="width:'+(xpPct)+'%"></div></div><div class="xp-hint">'+(lv.next?`${lvNm-lv.xp} XP para ${lv.next.name}`:'Nivel máximo alcanzado')+'</div>';
   cont.appendChild(xpMini);
 
   // Progress
@@ -977,43 +936,42 @@ function renderToday(){
       card.id='exc-'+i;
 
       // Build series rows HTML
-      let srowsHTML=sets.map(function(set,si){
-        return '<div class="sr" id="sr-'+i+'-'+si+'">'+
-        '<div class="sr-num">'+(si+1)+'</div>'+
-        '<input class="sr-inp" id="sri-kg-'+i+'-'+si+'" type="number" step="0.5" placeholder="kg" value="'+(set.kg||'')+'" onchange="updateSet('+i+','+si+',\'kg\',this.value)">'+
-        '<div class="sr-lbl">kg</div>'+
-        '<input class="sr-inp" id="sri-r-'+i+'-'+si+'" type="number" placeholder="reps" value="'+(set.reps||'')+'" onchange="updateSet('+i+','+si+',\'reps\',this.value)">'+
-        '<div class="sr-lbl">reps</div>'+
-        '<div class="sr-done'+(set.done?' ok':'')+'" id="sr-done-'+i+'-'+si+'" onclick="toggleSetDone('+i+','+si+')">✓</div>'+
-        '</div>';
-      }).join('');
+      let srowsHTML=sets.map((set,si)=>'
+        <div class="sr" id="sr-'+(i)+'-'+(si)+'">
+          <div class="sr-num">'+(si+1)+'</div>
+          <input class="sr-inp" id="sri-kg-'+(i)+'-'+(si)+'" type="number" step="0.5" placeholder="kg" value="'+(set.kg||'')+'" onchange="updateSet('+(i)+','+(si)+',\'kg\',this.value)">
+          <div class="sr-lbl">kg</div>
+          <input class="sr-inp" id="sri-r-'+(i)+'-'+(si)+'" type="number" placeholder="reps" value="'+(set.reps||'')+'" onchange="updateSet('+(i)+','+(si)+',\'reps\',this.value)">
+          <div class="sr-lbl">reps</div>
+          <div class="sr-done'+(set.done?' ok':'')+'" id="sr-done-'+(i)+'-'+(si)+'" onclick="toggleSetDone('+(i)+','+(si)+')">✓</div>
+        </div>').join('');
 
-      card.innerHTML=`
-        <div class="exc-top" onclick="toggleExc(${i})">
-          <div class="exc-ico">${ex.icon}</div>
+      card.innerHTML='
+        <div class="exc-top" onclick="toggleExc('+(i)+')">
+          <div class="exc-ico">'+(ex.icon)+'</div>
           <div class="exc-inf">
-            <div class="exc-name">${ex.name}</div>
-            <div class="exc-meta">${ex.series} series · ${ex.reps} reps</div>
+            <div class="exc-name">'+(ex.name)+'</div>
+            <div class="exc-meta">'+(ex.series)+' series · '+(ex.reps)+' reps</div>
           </div>
           <div class="exc-right">
-            <div class="exc-kg">${ex.weight}<span class="exc-kgu"> kg</span></div>
-            ${tip?`<div class="exc-tip ${tip.cls}">${tip.txt}</div>`:''}
-            ${pr?`<div class="pr-badge">🏆 PR: ${pr.weight}kg</div>`:''}
+            <div class="exc-kg">'+(ex.weight)+'<span class="exc-kgu"> kg</span></div>
+            '+(tip?`<div class="exc-tip ${tip.cls}">${tip.txt}</div>`:'')+'
+            '+(pr?`<div class="pr-badge">🏆 PR: ${pr.weight}kg</div>`:'')+'
           </div>
           <div class="done-ck">✓</div>
         </div>
-        <div class="series-logger" id="sl-${i}">
+        <div class="series-logger" id="sl-'+(i)+'">
           <div class="sl-header">
             <div class="sl-title">SERIES</div>
-            <div class="sl-add" onclick="addSet(${i})">+ Serie</div>
+            <div class="sl-add" onclick="addSet('+(i)+')">+ Serie</div>
           </div>
-          <div class="series-rows" id="srows-${i}">${srowsHTML}</div>
+          <div class="series-rows" id="srows-'+(i)+'">'+(srowsHTML)+'</div>
           <div class="sl-actions">
-            <button class="sl-btn less" onclick="markEx(${i},'less',event)"><span class="bi">↓</span><span class="bl">Menos</span></button>
-            <button class="sl-btn same" onclick="markEx(${i},'same',event)"><span class="bi">✓</span><span class="bl">Igual</span></button>
-            <button class="sl-btn more" onclick="markEx(${i},'more',event)"><span class="bi">↑</span><span class="bl">Más peso</span></button>
+            <button class="sl-btn less" onclick="markEx('+(i)+',\'less\',event)"><span class="bi">↓</span><span class="bl">Menos</span></button>
+            <button class="sl-btn same" onclick="markEx('+(i)+',\'same\',event)"><span class="bi">✓</span><span class="bl">Igual</span></button>
+            <button class="sl-btn more" onclick="markEx('+(i)+',\'more\',event)"><span class="bi">↑</span><span class="bl">Más peso</span></button>
           </div>
-        </div>`;
+        </div>';
       list.appendChild(card);
     });
     cont.appendChild(list);
@@ -1027,7 +985,7 @@ function renderToday(){
   // Cinta
   if(showCinta){
     const cinta=document.createElement('div');cinta.className='cinta'+(cintaDone?' done':'');
-    cinta.innerHTML=`<div style="font-size:22px;">🏃</div><div class="cinta-inf"><div class="cinta-t">Cinta de correr</div><div class="cinta-s">20 min · Inclinación 10 · Velocidad 5.5</div></div><div class="cinta-ck">${cintaDone?'✓':'○'}</div>`;
+    cinta.innerHTML='<div style="font-size:22px;">🏃</div><div class="cinta-inf"><div class="cinta-t">Cinta de correr</div><div class="cinta-s">20 min · Inclinación 10 · Velocidad 5.5</div></div><div class="cinta-ck">'+(cintaDone?'✓':'○')+'</div>';
     cinta.onclick=()=>{cintaDone=!cintaDone;cinta.classList.toggle('done',cintaDone);cinta.querySelector('.cinta-ck').textContent=cintaDone?'✓':'○';updateProgress();};
     cont.appendChild(cinta);
   }
@@ -1035,7 +993,7 @@ function renderToday(){
   // ABS
   const absB=document.createElement('div');absB.className='abs-block';
   let absH='';
-  for(let i=0;i<3;i++) absH+=`<div class="abs-set${absDone[i]?' done':''}" id="abs-${i}" onclick="toggleAbs(${i})"><span class="abs-n">${i+1}</span><span class="abs-l">${absDone[i]?'✓':'25 reps'}</span></div>`;
+  for(let i=0;i<3;i++) absH+='<div class="abs-set'+(absDone[i]?' done':'')+'" id="abs-'+(i)+'" onclick="toggleAbs('+(i)+')"><span class="abs-n">'+(i+1)+'</span><span class="abs-l">'+(absDone[i]?'✓':'25 reps')+'</span></div>';
   absB.innerHTML=`<div class="abs-hdr"><div class="abs-t">Total ABS Technogym</div><div class="abs-s">60–65 kg</div></div><div class="abs-sets">${absH}</div>`;
   cont.appendChild(absB);
 }
@@ -1080,13 +1038,8 @@ function addSet(exIdx){
   const si=session[ex.name].sets.length-1;
   const container=document.getElementById('srows-'+exIdx);
   if(container){
-    const row=document.createElement('div');row.className='sr';row.id='sr-'+exIdx+'-'+si;
-    row.innerHTML='<div class="sr-num">'+(si+1)+'</div>'+
-      '<input class="sr-inp" id="sri-kg-'+exIdx+'-'+si+'" type="number" step="0.5" placeholder="kg" value="'+(newSet.kg||'')+'" onchange="updateSet('+exIdx+','+si+',\'kg\',this.value)">'+
-      '<div class="sr-lbl">kg</div>'+
-      '<input class="sr-inp" id="sri-r-'+exIdx+'-'+si+'" type="number" placeholder="reps" value="'+(newSet.reps||'')+'" onchange="updateSet('+exIdx+','+si+',\'reps\',this.value)">'+
-      '<div class="sr-lbl">reps</div>'+
-      '<div class="sr-done" id="sr-done-'+exIdx+'-'+si+'" onclick="toggleSetDone('+exIdx+','+si+')">✓</div>';
+    const row=document.createElement('div');row.className='sr';row.id=`sr-${exIdx}-${si}`;
+    row.innerHTML='<div class="sr-num">'+(si+1)+'</div><input class="sr-inp" id="sri-kg-'+(exIdx)+'-'+(si)+'" type="number" step="0.5" placeholder="kg" value="'+(newSet.kg||'')+'" onchange="updateSet('+(exIdx)+','+(si)+',\'kg\',this.value)"><div class="sr-lbl">kg</div><input class="sr-inp" id="sri-r-'+(exIdx)+'-'+(si)+'" type="number" placeholder="reps" value="'+(newSet.reps||'')+'" onchange="updateSet('+(exIdx)+','+(si)+',\'reps\',this.value)"><div class="sr-lbl">reps</div><div class="sr-done" id="sr-done-'+(exIdx)+'-'+(si)+'" onclick="toggleSetDone('+(exIdx)+','+(si)+')">✓</div>';
     container.appendChild(row);
   }
 }
@@ -1177,28 +1130,28 @@ function renderCatalog(){
     const muscS=ex.muscles?ex.muscles.secondary.map(m=>`<span class="mt">${m}</span>`).join(''):'';
     const stepsH=ex.steps?ex.steps.map(s=>`<li>${s}</li>`).join(''):'';
     const errH=ex.errors?ex.errors.map(e=>`<li style="color:var(--danger);">${e}</li>`).join(''):'';
-    item.innerHTML=`
+    item.innerHTML='
       <div class="ci-top">
-        <div class="ci-ico">${ex.icon}</div>
+        <div class="ci-ico">'+(ex.icon)+'</div>
         <div class="ci-inf">
-          <div class="ci-name">${ex.name}</div>
-          <div class="ci-machine">${ex.machine}</div>
-          <div class="ci-tagw"><span class="tag ${ex.type}">${ex.muscle}</span></div>
+          <div class="ci-name">'+(ex.name)+'</div>
+          <div class="ci-machine">'+(ex.machine)+'</div>
+          <div class="ci-tagw"><span class="tag '+(ex.type)+'">'+(ex.muscle)+'</span></div>
         </div>
-        <div class="ci-btn">${inR?'✓':'+'}</div>
+        <div class="ci-btn">'+(inR?'✓':'+')+'</div>
       </div>
       <div class="ci-expand">
-        <img class="ci-photo" src="${ex.photo}" alt="${ex.name}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <div class="ci-ph-err"><span style="font-size:36px;">${ex.icon}</span><p style="font-size:11px;color:var(--muted);">Imagen no disponible</p></div>
+        <img class="ci-photo" src="'+(ex.photo)+'" alt="'+(ex.name)+'" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">
+        <div class="ci-ph-err"><span style="font-size:36px;">'+(ex.icon)+'</span><p style="font-size:11px;color:var(--muted);">Imagen no disponible</p></div>
         <div class="ci-desc">
-          ${pr?`<div class="pr-line"><div class="pr-line-ico">🏆</div><div class="pr-line-inf">Tu récord personal · ${pr.date}</div><div class="pr-line-val">${pr.weight}kg × ${pr.reps}</div></div>`:''}
-          <div class="ci-sec"><div class="ci-sec-t">DESCRIPCIÓN</div><div class="ci-sec-p">${ex.desc||''}</div></div>
-          ${ex.muscles?`<div class="ci-sec"><div class="ci-sec-t">MÚSCULOS</div><div class="ci-mlist">${muscP}${muscS}</div></div>`:''}
-          ${ex.steps?`<div class="ci-sec"><div class="ci-sec-t">EJECUCIÓN</div><ul class="ci-steps">${stepsH}</ul></div>`:''}
-          ${ex.errors?`<div class="ci-sec"><div class="ci-sec-t">ERRORES COMUNES</div><ul class="ci-steps">${errH}</ul></div>`:''}
-          ${!inR?`<button class="ci-add-btn" onclick="openModal(CATALOG.find(e=>e.name===decodeURIComponent('${encodeURIComponent(ex.name)}')));event.stopPropagation()">+ Añadir a mi rutina</button>`:`<div style="text-align:center;padding:10px 14px 14px;font-size:12px;color:var(--accent);">✓ Ya está en tu rutina</div>`}
+          '+(pr?`<div class="pr-line"><div class="pr-line-ico">🏆</div><div class="pr-line-inf">Tu récord personal · ${pr.date}</div><div class="pr-line-val">${pr.weight}kg × ${pr.reps}</div></div>`:'')+'
+          <div class="ci-sec"><div class="ci-sec-t">DESCRIPCIÓN</div><div class="ci-sec-p">'+(ex.desc||'')+'</div></div>
+          '+(ex.muscles?`<div class="ci-sec"><div class="ci-sec-t">MÚSCULOS</div><div class="ci-mlist">${muscP}${muscS}</div></div>`:'')+'
+          '+(ex.steps?`<div class="ci-sec"><div class="ci-sec-t">EJECUCIÓN</div><ul class="ci-steps">${stepsH}</ul></div>`:'')+'
+          '+(ex.errors?`<div class="ci-sec"><div class="ci-sec-t">ERRORES COMUNES</div><ul class="ci-steps">${errH}</ul></div>`:'')+'
+          '+(inR?'<div style="text-align:center;padding:10px 14px 14px;font-size:12px;color:var(--accent);">✓ Ya está en tu rutina</div>':'<button class="ci-add-btn" onclick="openModal(CATALOG.find(function(q){return q.name===ex.name;}));event.stopPropagation()">+ Añadir a mi rutina</button>')+'
         </div>
-      </div>`;
+      </div>';
     item.querySelector('.ci-top').onclick=(e)=>{if(e.target.closest('.ci-btn')){openModal(ex);return;}toggleCatItem(item);};
     list.appendChild(item);
   });
@@ -1233,7 +1186,7 @@ function renderRoutine(){
   WEEK.forEach(d=>{
     const exs=routine[d.key]||[];
     const block=document.createElement('div');block.className='db';
-    const items=exs.length?exs.map((ex,i)=>`<div class="re"><div class="re-ico">${ex.icon}</div><div class="re-inf"><div class="re-name">${ex.name}</div><div class="re-meta">${ex.series} series · ${ex.reps} reps · ${ex.weight} kg</div></div><div class="re-del" onclick="delEx('${d.key}',${i})">✕</div></div>`).join(''):'<div class="empty-day">Sin ejercicios — añade desde el catálogo</div>';
+    const items=exs.length?exs.map((ex,i)=>'<div class="re"><div class="re-ico">'+(ex.icon)+'</div><div class="re-inf"><div class="re-name">'+(ex.name)+'</div><div class="re-meta">'+(ex.series)+' series · '+(ex.reps)+' reps · '+(ex.weight)+' kg</div></div><div class="re-del" onclick="delEx(\''+(d.key)+'\','+(i)+')">✕</div></div>').join(''):'<div class="empty-day">Sin ejercicios — añade desde el catálogo</div>';
     block.innerHTML=`<div class="db-hdr"><div class="db-t ${d.type}">${d.label.toUpperCase()} · ${d.type.toUpperCase()}</div><div class="db-c">${exs.length} ej.</div></div>${items}`;
     wrap.appendChild(block);
   });
@@ -1283,39 +1236,39 @@ function renderMuscleMap(){
     if(n===2) return 'rgba(232,255,71,0.55)';
     return 'rgba(232,255,71,0.85)';
   };
-  return `
+  return '
   <svg viewBox="0 0 200 320" xmlns="http://www.w3.org/2000/svg" style="max-height:280px;">
     <!-- Body outline -->
-    <ellipse cx="100" cy="30" rx="22" ry="26" fill="${heat('none')}" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+    <ellipse cx="100" cy="30" rx="22" ry="26" fill="'+(heat('none'))+'" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
     <!-- Neck -->
     <rect x="91" y="54" width="18" height="14" rx="4" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Chest -->
-    <ellipse cx="100" cy="88" rx="34" ry="22" fill="${heat('chest')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="100" cy="88" rx="34" ry="22" fill="'+(heat('chest'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Front delts left -->
-    <ellipse cx="62" cy="80" rx="11" ry="14" fill="${heat('front-delt')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="62" cy="80" rx="11" ry="14" fill="'+(heat('front-delt'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Front delts right -->
-    <ellipse cx="138" cy="80" rx="11" ry="14" fill="${heat('front-delt')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="138" cy="80" rx="11" ry="14" fill="'+(heat('front-delt'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Triceps left arm -->
-    <ellipse cx="50" cy="105" rx="9" ry="18" fill="${heat('triceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="50" cy="105" rx="9" ry="18" fill="'+(heat('triceps'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Triceps right arm -->
-    <ellipse cx="150" cy="105" rx="9" ry="18" fill="${heat('triceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="150" cy="105" rx="9" ry="18" fill="'+(heat('triceps'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Biceps left -->
-    <ellipse cx="52" cy="100" rx="7" ry="14" fill="${heat('biceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="52" cy="100" rx="7" ry="14" fill="'+(heat('biceps'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Biceps right -->
-    <ellipse cx="148" cy="100" rx="7" ry="14" fill="${heat('biceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="148" cy="100" rx="7" ry="14" fill="'+(heat('biceps'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Abs -->
-    <rect x="83" y="108" width="34" height="38" rx="6" fill="${heat('abs')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <rect x="83" y="108" width="34" height="38" rx="6" fill="'+(heat('abs'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Abs lines -->
     <line x1="100" y1="108" x2="100" y2="146" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
     <line x1="83" y1="121" x2="117" y2="121" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
     <line x1="83" y1="133" x2="117" y2="133" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
     <!-- Lats left -->
-    <ellipse cx="74" cy="115" rx="12" ry="20" fill="${heat('lats')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="74" cy="115" rx="12" ry="20" fill="'+(heat('lats'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Lats right -->
-    <ellipse cx="126" cy="115" rx="12" ry="20" fill="${heat('lats')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="126" cy="115" rx="12" ry="20" fill="'+(heat('lats'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Rear delts / rhomboids (back indicator, shown on sides) -->
-    <ellipse cx="70" cy="82" rx="8" ry="10" fill="${heat('rear-delt')}" stroke="rgba(255,255,255,0.08)" stroke-width="1" opacity="0.7"/>
-    <ellipse cx="130" cy="82" rx="8" ry="10" fill="${heat('rhomboids')}" stroke="rgba(255,255,255,0.08)" stroke-width="1" opacity="0.7"/>
+    <ellipse cx="70" cy="82" rx="8" ry="10" fill="'+(heat('rear-delt'))+'" stroke="rgba(255,255,255,0.08)" stroke-width="1" opacity="0.7"/>
+    <ellipse cx="130" cy="82" rx="8" ry="10" fill="'+(heat('rhomboids'))+'" stroke="rgba(255,255,255,0.08)" stroke-width="1" opacity="0.7"/>
     <!-- Forearms left -->
     <rect x="41" y="128" width="16" height="28" rx="5" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
     <!-- Forearms right -->
@@ -1323,26 +1276,26 @@ function renderMuscleMap(){
     <!-- Hip -->
     <ellipse cx="100" cy="155" rx="28" ry="14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
     <!-- Glutes / upper leg -->
-    <ellipse cx="86" cy="172" rx="18" ry="22" fill="${heat('glutes')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
-    <ellipse cx="114" cy="172" rx="18" ry="22" fill="${heat('glutes')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="86" cy="172" rx="18" ry="22" fill="'+(heat('glutes'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="114" cy="172" rx="18" ry="22" fill="'+(heat('glutes'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Quads left -->
-    <ellipse cx="84" cy="208" rx="16" ry="26" fill="${heat('quads')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="84" cy="208" rx="16" ry="26" fill="'+(heat('quads'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Quads right -->
-    <ellipse cx="116" cy="208" rx="16" ry="26" fill="${heat('quads')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="116" cy="208" rx="16" ry="26" fill="'+(heat('quads'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Hamstrings (shown under quads) -->
-    <ellipse cx="84" cy="215" rx="14" ry="20" fill="${heat('hamstrings')}" stroke="rgba(255,255,255,0.07)" stroke-width="1" opacity="0.7"/>
-    <ellipse cx="116" cy="215" rx="14" ry="20" fill="${heat('hamstrings')}" stroke="rgba(255,255,255,0.07)" stroke-width="1" opacity="0.7"/>
+    <ellipse cx="84" cy="215" rx="14" ry="20" fill="'+(heat('hamstrings'))+'" stroke="rgba(255,255,255,0.07)" stroke-width="1" opacity="0.7"/>
+    <ellipse cx="116" cy="215" rx="14" ry="20" fill="'+(heat('hamstrings'))+'" stroke="rgba(255,255,255,0.07)" stroke-width="1" opacity="0.7"/>
     <!-- Knees -->
     <ellipse cx="84" cy="238" rx="13" ry="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
     <ellipse cx="116" cy="238" rx="13" ry="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
     <!-- Calves left -->
-    <ellipse cx="84" cy="272" rx="12" ry="22" fill="${heat('calves')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="84" cy="272" rx="12" ry="22" fill="'+(heat('calves'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Calves right -->
-    <ellipse cx="116" cy="272" rx="12" ry="22" fill="${heat('calves')}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <ellipse cx="116" cy="272" rx="12" ry="22" fill="'+(heat('calves'))+'" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
     <!-- Feet -->
     <ellipse cx="84" cy="300" rx="14" ry="8" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
     <ellipse cx="116" cy="300" rx="14" ry="8" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
-  </svg>`;
+  </svg>';
 }
 
 function renderCalendar(){
@@ -1358,13 +1311,13 @@ function renderCalendar(){
   dows.forEach(d=>{grid+=`<div class="cal-dow">${d}</div>`;});
   for(let i=0;i<adj;i++) grid+=`<div class="cal-day empty"></div>`;
   for(let d=1;d<=daysInMonth;d++){
-    const iso=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const iso=(y)+'-'+(String(m+1).padStart(2,'0'))+'-'+(String(d).padStart(2,'0'));
     const h=history.find(h=>h.dateISO===iso);
     const isToday=iso===todayStr;
     let cls='cal-day ';
     if(h) cls+=h.type;else cls+='no-train';
     if(isToday) cls+=' today';
-    const title=h?`${h.type.toUpperCase()} · ${h.volume?Math.round(h.volume/1000*10)/10+'k kg':''}`:d+'';
+    const title=h?(h.type.toUpperCase())+' · '+(h.volume?Math.round(h.volume/1000*10)/10+'k kg':''):d+'';
     grid+=`<div class="${cls}" title="${title}">${d}</div>`;
   }
   return grid;
@@ -1381,11 +1334,11 @@ function renderProgress(){
 
   // Stats
   const grid=document.createElement('div');grid.className='stats-grid';
-  grid.innerHTML=`
-    <div class="sc"><div class="sc-val">${totalSess}</div><div class="sc-lbl">Sesiones totales</div><div class="sc-sub">${xp.total} XP · ${Object.keys(prs).length} récords</div></div>
-    <div class="sc"><div class="sc-val">${streak}</div><div class="sc-lbl">Días de racha 🔥</div><div class="sc-sub">${streak>0?'¡Sigue así!':'Empieza hoy'}</div></div>
-    <div class="sc"><div class="sc-val">${Math.round(thisVol/1000*10)/10}k</div><div class="sc-lbl">Volumen esta sem.</div><div class="sc-sub">kg totales levantados</div></div>
-    <div class="sc"><div class="sc-val" style="color:${vd>=0?'var(--success)':'var(--danger)'}">${vd>=0?'+':''}${Math.round(Math.abs(vd)/1000*10)/10}k</div><div class="sc-lbl">vs sem. anterior</div><div class="sc-sub">${vd>=0?'Mejorando 📈':'Por debajo 📉'}</div></div>`;
+  grid.innerHTML='
+    <div class="sc"><div class="sc-val">'+(totalSess)+'</div><div class="sc-lbl">Sesiones totales</div><div class="sc-sub">'+(xp.total)+' XP · '+(Object.keys(prs).length)+' récords</div></div>
+    <div class="sc"><div class="sc-val">'+(streak)+'</div><div class="sc-lbl">Días de racha 🔥</div><div class="sc-sub">'+(streak>0?'¡Sigue así!':'Empieza hoy')+'</div></div>
+    <div class="sc"><div class="sc-val">'+(Math.round(thisVol/1000*10)/10)+'k</div><div class="sc-lbl">Volumen esta sem.</div><div class="sc-sub">kg totales levantados</div></div>
+    <div class="sc"><div class="sc-val" style="color:'+(vd>=0?'var(--success)':'var(--danger)')+'">'+(vd>=0?'+':'')+(Math.round(Math.abs(vd)/1000*10)/10)+'k</div><div class="sc-lbl">vs sem. anterior</div><div class="sc-sub">'+(vd>=0?'Mejorando 📈':'Por debajo 📉')+'</div></div>';
   cont.appendChild(grid);
 
   // Muscle map
@@ -1406,27 +1359,27 @@ function renderProgress(){
 
   // Calendario
   const calCard=document.createElement('div');calCard.className='cal-card';
-  calCard.innerHTML=`
+  calCard.innerHTML='
     <div class="cal-hdr">
-      <div class="cal-month" id="cal-month">${calViewDate.toLocaleDateString('es-ES',{month:'long',year:'numeric'})}</div>
+      <div class="cal-month" id="cal-month">'+(calViewDate.toLocaleDateString('es-ES',{month:'long',year:'numeric'}))+'</div>
       <div class="cal-nav">
         <div class="cal-nav-btn" onclick="calNav(-1)">‹</div>
         <div class="cal-nav-btn" onclick="calNav(1)">›</div>
       </div>
     </div>
-    <div class="cal-grid" id="cal-grid">${renderCalendar()}</div>
+    <div class="cal-grid" id="cal-grid">'+(renderCalendar())+'</div>
     <div class="cal-legend">
       <div class="cl-item"><div class="cl-dot" style="background:rgba(255,92,53,.6);"></div>Push</div>
       <div class="cl-item"><div class="cl-dot" style="background:rgba(77,166,255,.6);"></div>Pull</div>
       <div class="cl-item"><div class="cl-dot" style="background:rgba(61,220,132,.6);"></div>Legs</div>
       <div class="cl-item"><div class="cl-dot" style="background:var(--card2);border:0.5px solid var(--border);"></div>Descanso</div>
-    </div>`;
+    </div>';
   cont.appendChild(calCard);
 
   // Streak
   const strCard=document.createElement('div');strCard.className='streak-card';
   const t=new Date();let dH='';
-  for(let i=6;i>=0;i--){const d=new Date(t);d.setDate(t.getDate()-i);const iso=d.toISOString().split('T')[0];const tr=history.some(h=>h.dateISO===iso);const isT=i===0;const dn=['D','L','M','X','J','V','S'][d.getDay()];dH+=`<div class="sd${tr?' tr':''}${isT?' td nd':' nd'}"><span style="font-size:13px;">${tr?'✓':isT?'·':'○'}</span><span>${dn}</span></div>`;}
+  for(let i=6;i>=0;i--){const d=new Date(t);d.setDate(t.getDate()-i);const iso=d.toISOString().split('T')[0];const tr=history.some(h=>h.dateISO===iso);const isT=i===0;const dn=['D','L','M','X','J','V','S'][d.getDay()];dH+='<div class="sd'+(tr?' tr':'')+(isT?' td nd':' nd')+'"><span style="font-size:13px;">'+(tr?'✓':isT?'·':'○')+'</span><span>'+(dn)+'</span></div>';}
   strCard.innerHTML=`<div class="streak-row"><div style="font-size:13px;font-weight:600;">🔥 Racha</div><div class="streak-val">${streak} días</div></div><div class="streak-days">${dH}</div>`;
   cont.appendChild(strCard);
 
@@ -1434,7 +1387,7 @@ function renderProgress(){
   const prKeys=Object.keys(prs);
   if(prKeys.length){
     const prCard=document.createElement('div');prCard.className='pr-card';
-    prCard.innerHTML=`<div class="pr-hdr"><div class="pr-hdr-ico">🏆</div><div class="pr-hdr-t">Récords personales</div></div><div class="pr-list">${prKeys.map(n=>{const p=prs[n];const ex=CATALOG.find(e=>e.name===n);return `<div class="pr-item"><div class="pr-item-ico">${ex?ex.icon:'💪'}</div><div class="pr-item-inf"><div class="pr-item-name">${n}</div><div class="pr-item-date">${p.date}</div></div><div class="pr-item-val">${p.weight}kg × ${p.reps}</div></div>`;}).join('')}</div>`;
+    prCard.innerHTML='<div class="pr-hdr"><div class="pr-hdr-ico">🏆</div><div class="pr-hdr-t">Récords personales</div></div><div class="pr-list">'+(prKeys.map(n=>{const p=prs[n];const ex=CATALOG.find(e=>e.name===n);return '<div class="pr-item"><div class="pr-item-ico">'+(ex?ex.icon:'💪')+'</div><div class="pr-item-inf"><div class="pr-item-name">'+n+'</div><div class="pr-item-date">'+p.date+'</div></div><div class="pr-item-val">'+p.weight+'kg × '+p.reps+'</div></div>';}).join(''))+'</div>';
     cont.appendChild(prCard);
   }
 
@@ -1442,7 +1395,7 @@ function renderProgress(){
   const routineExNames=[...new Set(Object.values(routine).flatMap(a=>a.map(e=>e.name)))];
   const chartExNames=routineExNames.length?routineExNames:[...new Set(history.flatMap(h=>(h.exercises||[]).map(e=>e.name)))];
   const chCard=document.createElement('div');chCard.className='chart-card';
-  chCard.innerHTML=`<div style="font-size:13px;font-weight:600;margin-bottom:4px;">📈 Evolución de peso</div><div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Progresión por ejercicio</div><select class="chart-sel" id="chart-sel" onchange="updateChart()">${chartExNames.length?chartExNames.map(n=>`<option>${n}</option>`).join(''):'<option>Sin datos aún</option>'}</select><div class="chart-area"><canvas id="weight-chart" class="mc"></canvas></div><div class="chart-legend" id="chart-leg"></div>`;
+  chCard.innerHTML='<div style="font-size:13px;font-weight:600;margin-bottom:4px;">📈 Evolución de peso</div><div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Progresión por ejercicio</div><select class="chart-sel" id="chart-sel" onchange="updateChart()">'+(chartExNames.length?chartExNames.map(n=>`<option>${n}</option>`).join(''):'<option>Sin datos aún</option>')+'</select><div class="chart-area"><canvas id="weight-chart" class="mc"></canvas></div><div class="chart-legend" id="chart-leg"></div>';
   cont.appendChild(chCard);
 
   // XP
@@ -1450,14 +1403,14 @@ function renderProgress(){
   const lvNm=lv.next?lv.next.min:lv.xp+1;
   const xpPct=Math.min(100,Math.round(((lv.xp-lvPm)/(lvNm-lvPm))*100));
   const xpCard=document.createElement('div');xpCard.className='xp-card';
-  xpCard.innerHTML=`
+  xpCard.innerHTML='
     <div class="lv-disp">
-      <div class="lv-badge"><div class="lv-num">${lv.level}</div><div class="lv-lbl">NIVEL</div></div>
-      <div class="lv-inf"><div class="lv-name">${lv.icon} ${lv.name}</div><div class="lv-sub">${lv.xp} XP${lv.next?` · ${lvNm-lv.xp} XP para ${lv.next.name}`:' · Nivel máximo'}</div></div>
+      <div class="lv-badge"><div class="lv-num">'+(lv.level)+'</div><div class="lv-lbl">NIVEL</div></div>
+      <div class="lv-inf"><div class="lv-name">'+(lv.icon)+' '+(lv.name)+'</div><div class="lv-sub">'+(lv.xp)+' XP'+(lv.next?` · ${lvNm-lv.xp} XP para ${lv.next.name}`:' · Nivel máximo')+'</div></div>
     </div>
-    <div class="xp-bar-f2"><div class="xp-bar-f2-f" style="width:${xpPct}%"></div></div>
-    <div class="xp-bar-lbls"><span>${lvPm} XP</span><span>${lv.xp} XP</span><span>${lvNm} XP</span></div>
-    <div class="ach-grid">${ACHS.map(a=>`<div class="ach${xp.achievements.includes(a.id)?' earned':' locked'}"><span class="ach-ico">${a.icon}</span><span class="ach-name">${a.name}</span></div>`).join('')}</div>`;
+    <div class="xp-bar-f2"><div class="xp-bar-f2-f" style="width:'+(xpPct)+'%"></div></div>
+    <div class="xp-bar-lbls"><span>'+(lvPm)+' XP</span><span>'+(lv.xp)+' XP</span><span>'+(lvNm)+' XP</span></div>
+    <div class="ach-grid">'+(ACHS.map(a=>'<div class="ach"+(xp.achievements.includes(a.id)?' earned':' locked')+'"><span class="ach-ico">'+a.icon+'</span><span class="ach-name">'+a.name+'</span></div>').join(''))+'</div>';
   cont.appendChild(xpCard);
   setTimeout(()=>updateChart(),100);
 }
@@ -1484,7 +1437,7 @@ function updateChart(){
   const finalW=useActual?actualWeights.map((v,i)=>v||weights[i]):weights;
   drawChart('weight-chart',finalW,'#e8ff47');
   const leg=document.getElementById('chart-leg');
-  if(leg) leg.innerHTML=`<span>${entries.length} sesiones</span>${baseW?`<span>Actual: <b style="color:var(--accent)">${baseW}kg</b></span>`:''}${prs[exName]?`<span>🏆 PR: ${prs[exName].weight}kg</span>`:''}`;
+  if(leg) leg.innerHTML='<span>'+(entries.length)+' sesiones</span>'+(baseW?`<span>Actual: <b style="color:var(--accent)">${baseW}kg</b></span>`:'')+(prs[exName]?`<span>🏆 PR: ${prs[exName].weight}kg</span>`:'');
 }
 
 // ═══════════════ ANÁLISIS ═══════════════
@@ -1538,7 +1491,7 @@ function renderAlgo(){
   if(streak>=5) planH+=`<div class="ai"><div class="ai-ico">🏋️</div><div class="ai-inf"><div class="ai-n">Semana de carga alta</div><div class="ai-s">Tu racha es sólida — sube la intensidad</div></div><div class="ai-v vu">+10%</div></div>`;
   else if(streak>=3) planH+=`<div class="ai"><div class="ai-ico">📈</div><div class="ai-inf"><div class="ai-n">Semana de progresión</div><div class="ai-s">Buen ritmo — mantén o sube ligeramente</div></div><div class="ai-v vi">Normal</div></div>`;
   else planH+=`<div class="ai"><div class="ai-ico">🔄</div><div class="ai-inf"><div class="ai-n">Semana de reactivación</div><div class="ai-s">Retoma el ritmo con cargas moderadas</div></div><div class="ai-v vw">Suave</div></div>`;
-  planH+=`<div class="ai"><div class="ai-ico">📆</div><div class="ai-inf"><div class="ai-n">${sw} / 6 sesiones esta semana</div><div class="ai-s">${sw>=4?'¡Excelente asistencia!':'Intenta completar tus 6 días'}</div></div><div class="ai-v ${sw>=4?'vu':'vw'}">${sw>=4?'✓':'⟳'}</div></div>`;
+  planH+='<div class="ai"><div class="ai-ico">📆</div><div class="ai-inf"><div class="ai-n">'+(sw)+' / 6 sesiones esta semana</div><div class="ai-s">'+(sw>=4?'¡Excelente asistencia!':'Intenta completar tus 6 días')+'</div></div><div class="ai-v '+(sw>=4?'vu':'vw')+'">'+(sw>=4?'✓':'⟳')+'</div></div>';
   // Volume recommendation
   const avgVol=history.slice(0,4).reduce((a,h)=>a+(h.volume||0),0)/Math.max(history.slice(0,4).length,1);
   if(avgVol>0) planH+=`<div class="ai"><div class="ai-ico">📊</div><div class="ai-inf"><div class="ai-n">Volumen medio por sesión</div><div class="ai-s">Basado en tus últimas 4 sesiones</div></div><div class="ai-v vi">${Math.round(avgVol/1000*10)/10}k kg</div></div>`;
@@ -1547,7 +1500,7 @@ function renderAlgo(){
   // PRs summary
   const prList=Object.entries(prs);
   if(prList.length){
-    let prH=prList.map(([n,p])=>{const ex=CATALOG.find(e=>e.name===n);return `<div class="ai"><div class="ai-ico">${ex?ex.icon:'💪'}</div><div class="ai-inf"><div class="ai-n">${n}</div><div class="ai-s">${p.date}</div></div><div class="ai-v" style="color:var(--accent);">${p.weight}kg</div></div>`;}).join('');
+    let prH=prList.map(([n,p])=>{const ex=CATALOG.find(e=>e.name===n);return '<div class="ai"><div class="ai-ico">'+(ex?ex.icon:'💪')+'</div><div class="ai-inf"><div class="ai-n">'+(n)+'</div><div class="ai-s">'+(p.date)+'</div></div><div class="ai-v" style="color:var(--accent);">'+(p.weight)+'kg</div></div>';}).join('');
     mk('🏆','Récords personales','Tus mejores marcas históricas','bg',`${prList.length} PRs`,prH);
   }
 }
