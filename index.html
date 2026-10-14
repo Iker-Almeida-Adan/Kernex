@@ -416,7 +416,7 @@ canvas.mc{width:100%;height:100px;}
 <div id="app">
   <!-- HOY -->
   <div class="screen active" id="sc-today">
-    <div class="topbar"><div class="logo">KERN<em>EX</em></div><div style="display:flex;align-items:center;gap:6px;"><div class="topbar-r" id="today-date">—</div><div id="sync-dot" style="width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;" title="Sincronizando..."></div></div></div>
+    <div class="topbar"><div class="logo">KERN<em>EX</em></div><div style="display:flex;align-items:center;gap:6px;"><div class="topbar-r" id="today-date">—</div><div id="sync-dot" style="width:7px;height:7px;border-radius:50%;background:#3a3a45;flex-shrink:0;"></div></div></div>
     <div class="scroll"><div id="today-content"></div><div class="gap"></div></div>
   </div>
   <!-- CATÁLOGO -->
@@ -750,7 +750,7 @@ function addXP(pts,ach){
   xp.total+=pts;
   if(ach&&!xp.achievements.includes(ach)) xp.achievements.push(ach);
   sv('kx6_xp',xp);
-  if(ach) dbSaveXP();
+  if(ach) _saveXP();
 }
 function checkAchs(){
   const s=calcStreak();
@@ -777,7 +777,7 @@ function checkPR(exName,kg,reps){
     xp.prCount=(xp.prCount||0)+1;
     sv('kx6_xp',xp);
     showPRToast();
-    dbSavePR(key,prs[key]);
+    _savePR(key,prs[key]);
     return true;
   }
   return false;
@@ -789,80 +789,67 @@ function showPRToast(){
 }
 
 
-// ═══════════════ SUPABASE CONFIG ═══════════════
-const SUPA_URL = 'https://cbfxvotbouaaxoklkqnw.supabase.co';
-const SUPA_KEY = 'sb_publishable_oD48ADO4PxzXLqlKGkpGog_Aca7jB-V';
-
-async function supaReq(method, table, body, filter='') {
-  try {
-    const res = await fetch(`${SUPA_URL}/rest/v1/${table}${filter}`, {
-      method,
-      headers: {
-        'apikey': SUPA_KEY,
-        'Authorization': `Bearer ${SUPA_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation'
-      },
-      body: body ? JSON.stringify(body) : undefined
+// ═══ SUPABASE ═══
+const _SU='https://cbfxvotbouaaxoklkqnw.supabase.co';
+const _SK='sb_publishable_oD48ADO4PxzXLqlKGkpGog_Aca7jB-V';
+async function _req(m,t,b,f){
+  try{
+    const r=await fetch(_SU+'/rest/v1/'+t+(f||''),{
+      method:m,
+      headers:{'apikey':_SK,'Authorization':'Bearer '+_SK,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:b?JSON.stringify(b):undefined
     });
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
-  } catch(e) { return null; }
+    const tx=await r.text();return tx?JSON.parse(tx):null;
+  }catch(e){return null;}
 }
-
-async function dbLoad() {
-  try {
-    const [r, h, p, x] = await Promise.all([
-      supaReq('GET','kernex_routine',null,'?user_id=eq.iker&order=updated_at.desc&limit=1'),
-      supaReq('GET','kernex_history',null,'?user_id=eq.iker&order=created_at.desc&limit=90'),
-      supaReq('GET','kernex_prs',null,'?user_id=eq.iker'),
-      supaReq('GET','kernex_xp',null,'?user_id=eq.iker&limit=1')
+async function _load(){
+  try{
+    const[r,h,p,x]=await Promise.all([
+      _req('GET','kernex_routine',null,'?user_id=eq.iker&order=updated_at.desc&limit=1'),
+      _req('GET','kernex_history',null,'?user_id=eq.iker&order=created_at.desc&limit=90'),
+      _req('GET','kernex_prs',null,'?user_id=eq.iker'),
+      _req('GET','kernex_xp',null,'?user_id=eq.iker&limit=1')
     ]);
-    if(r&&r.length) routine = r[0].data;
-    if(h&&h.length) history = h.map(row=>({dateISO:row.date_iso,date:row.date,type:row.type,label:row.label,volume:row.volume,durMins:row.dur_mins,exercises:row.exercises||[]}));
-    if(p&&p.length) p.forEach(row=>{ prs[row.exercise_name]={weight:row.weight,reps:row.reps,date:row.date}; });
-    if(x&&x.length) xp={total:x[0].total||0,achievements:x[0].achievements||[],moreCount:x[0].more_count||0,sessions:x[0].sessions||0,prCount:x[0].pr_count||0};
-    showSync(true);
-  } catch(e) { showSync(false); }
+    if(r&&r.length)routine=r[0].data;
+    if(h&&h.length)history=h.map(function(row){return{dateISO:row.date_iso,date:row.date,type:row.type,label:row.label,volume:row.volume,durMins:row.dur_mins,exercises:row.exercises||[]};});
+    if(p&&p.length)p.forEach(function(row){prs[row.exercise_name]={weight:row.weight,reps:row.reps,date:row.date};});
+    if(x&&x.length)xp={total:x[0].total||0,achievements:x[0].achievements||[],moreCount:x[0].more_count||0,sessions:x[0].sessions||0,prCount:x[0].pr_count||0};
+    _sync(true);
+  }catch(e){_sync(false);}
 }
-
-async function dbSaveRoutine() {
-  try {
-    const ex = await supaReq('GET','kernex_routine',null,'?user_id=eq.iker&limit=1');
-    if(ex&&ex.length) await supaReq('PATCH','kernex_routine',{data:routine,updated_at:new Date().toISOString()},'?user_id=eq.iker');
-    else await supaReq('POST','kernex_routine',{user_id:'iker',data:routine});
-    showSync(true);
-  } catch(e) { showSync(false); }
+async function _saveRoutine(){
+  try{
+    const ex=await _req('GET','kernex_routine',null,'?user_id=eq.iker&limit=1');
+    if(ex&&ex.length)await _req('PATCH','kernex_routine',{data:routine,updated_at:new Date().toISOString()},'?user_id=eq.iker');
+    else await _req('POST','kernex_routine',{user_id:'iker',data:routine});
+    _sync(true);
+  }catch(e){_sync(false);}
 }
-
-async function dbSaveSession(entry) {
-  try {
-    const ex = await supaReq('GET','kernex_history',null,`?user_id=eq.iker&date_iso=eq.${entry.dateISO}&limit=1`);
-    if(ex&&ex.length) return;
-    await supaReq('POST','kernex_history',{user_id:'iker',date_iso:entry.dateISO,date:entry.date,type:entry.type,label:entry.label,volume:entry.volume,dur_mins:entry.durMins,exercises:entry.exercises});
-    showSync(true);
-  } catch(e) { showSync(false); }
+async function _saveSession(entry){
+  try{
+    const ex=await _req('GET','kernex_history',null,'?user_id=eq.iker&date_iso=eq.'+entry.dateISO+'&limit=1');
+    if(ex&&ex.length)return;
+    await _req('POST','kernex_history',{user_id:'iker',date_iso:entry.dateISO,date:entry.date,type:entry.type,label:entry.label,volume:entry.volume,dur_mins:entry.durMins,exercises:entry.exercises});
+    _sync(true);
+  }catch(e){}
 }
-
-async function dbSavePR(exName, prData) {
-  try {
-    const ex = await supaReq('GET','kernex_prs',null,`?user_id=eq.iker&exercise_name=eq.${encodeURIComponent(exName)}&limit=1`);
-    if(ex&&ex.length) await supaReq('PATCH','kernex_prs',{weight:prData.weight,reps:prData.reps,date:prData.date,updated_at:new Date().toISOString()},`?user_id=eq.iker&exercise_name=eq.${encodeURIComponent(exName)}`);
-    else await supaReq('POST','kernex_prs',{user_id:'iker',exercise_name:exName,weight:prData.weight,reps:prData.reps,date:prData.date});
-  } catch(e) {}
+async function _savePR(name,data){
+  try{
+    const ex=await _req('GET','kernex_prs',null,'?user_id=eq.iker&exercise_name=eq.'+encodeURIComponent(name)+'&limit=1');
+    if(ex&&ex.length)await _req('PATCH','kernex_prs',{weight:data.weight,reps:data.reps,date:data.date,updated_at:new Date().toISOString()},'?user_id=eq.iker&exercise_name=eq.'+encodeURIComponent(name));
+    else await _req('POST','kernex_prs',{user_id:'iker',exercise_name:name,weight:data.weight,reps:data.reps,date:data.date});
+  }catch(e){}
 }
-
-async function dbSaveXP() {
-  try {
-    const ex = await supaReq('GET','kernex_xp',null,'?user_id=eq.iker&limit=1');
-    if(ex&&ex.length) await supaReq('PATCH','kernex_xp',{total:xp.total,achievements:xp.achievements,more_count:xp.moreCount,sessions:xp.sessions,pr_count:xp.prCount,updated_at:new Date().toISOString()},'?user_id=eq.iker');
-    else await supaReq('POST','kernex_xp',{user_id:'iker',total:xp.total,achievements:xp.achievements,more_count:xp.moreCount,sessions:xp.sessions,pr_count:xp.prCount});
-  } catch(e) {}
+async function _saveXP(){
+  try{
+    const ex=await _req('GET','kernex_xp',null,'?user_id=eq.iker&limit=1');
+    if(ex&&ex.length)await _req('PATCH','kernex_xp',{total:xp.total,achievements:xp.achievements,more_count:xp.moreCount,sessions:xp.sessions,pr_count:xp.prCount,updated_at:new Date().toISOString()},'?user_id=eq.iker');
+    else await _req('POST','kernex_xp',{user_id:'iker',total:xp.total,achievements:xp.achievements,more_count:xp.moreCount,sessions:xp.sessions,pr_count:xp.prCount});
+  }catch(e){}
 }
-
-function showSync(ok) {
-  const el = document.getElementById('sync-dot');
-  if(el) el.style.background = ok ? '#22c55e' : '#ef4444';
+function _sync(ok){
+  var el=document.getElementById('sync-dot');
+  if(el)el.style.background=ok?'#22c55e':'#ef4444';
 }
 
 // ═══════════════ TIMER ═══════════════
@@ -990,15 +977,16 @@ function renderToday(){
       card.id='exc-'+i;
 
       // Build series rows HTML
-      let srowsHTML=sets.map((set,si)=>`
-        <div class="sr" id="sr-${i}-${si}">
-          <div class="sr-num">${si+1}</div>
-          <input class="sr-inp" id="sri-kg-${i}-${si}" type="number" step="0.5" placeholder="kg" value="${set.kg||''}" onchange="updateSet(${i},${si},'kg',this.value)">
-          <div class="sr-lbl">kg</div>
-          <input class="sr-inp" id="sri-r-${i}-${si}" type="number" placeholder="reps" value="${set.reps||''}" onchange="updateSet(${i},${si},'reps',this.value)">
-          <div class="sr-lbl">reps</div>
-          <div class="sr-done${set.done?' ok':''}" id="sr-done-${i}-${si}" onclick="toggleSetDone(${i},${si})">✓</div>
-        </div>`).join('');
+      let srowsHTML=sets.map(function(set,si){
+        return '<div class="sr" id="sr-'+i+'-'+si+'">'+
+        '<div class="sr-num">'+(si+1)+'</div>'+
+        '<input class="sr-inp" id="sri-kg-'+i+'-'+si+'" type="number" step="0.5" placeholder="kg" value="'+(set.kg||'')+'" onchange="updateSet('+i+','+si+',\'kg\',this.value)">'+
+        '<div class="sr-lbl">kg</div>'+
+        '<input class="sr-inp" id="sri-r-'+i+'-'+si+'" type="number" placeholder="reps" value="'+(set.reps||'')+'" onchange="updateSet('+i+','+si+',\'reps\',this.value)">'+
+        '<div class="sr-lbl">reps</div>'+
+        '<div class="sr-done'+(set.done?' ok':'')+'" id="sr-done-'+i+'-'+si+'" onclick="toggleSetDone('+i+','+si+')">✓</div>'+
+        '</div>';
+      }).join('');
 
       card.innerHTML=`
         <div class="exc-top" onclick="toggleExc(${i})">
@@ -1092,8 +1080,13 @@ function addSet(exIdx){
   const si=session[ex.name].sets.length-1;
   const container=document.getElementById('srows-'+exIdx);
   if(container){
-    const row=document.createElement('div');row.className='sr';row.id=`sr-${exIdx}-${si}`;
-    row.innerHTML=`<div class="sr-num">${si+1}</div><input class="sr-inp" id="sri-kg-${exIdx}-${si}" type="number" step="0.5" placeholder="kg" value="${newSet.kg||''}" onchange="updateSet(${exIdx},${si},'kg',this.value)"><div class="sr-lbl">kg</div><input class="sr-inp" id="sri-r-${exIdx}-${si}" type="number" placeholder="reps" value="${newSet.reps||''}" onchange="updateSet(${exIdx},${si},'reps',this.value)"><div class="sr-lbl">reps</div><div class="sr-done" id="sr-done-${exIdx}-${si}" onclick="toggleSetDone(${exIdx},${si})">✓</div>`;
+    const row=document.createElement('div');row.className='sr';row.id='sr-'+exIdx+'-'+si;
+    row.innerHTML='<div class="sr-num">'+(si+1)+'</div>'+
+      '<input class="sr-inp" id="sri-kg-'+exIdx+'-'+si+'" type="number" step="0.5" placeholder="kg" value="'+(newSet.kg||'')+'" onchange="updateSet('+exIdx+','+si+',\'kg\',this.value)">'+
+      '<div class="sr-lbl">kg</div>'+
+      '<input class="sr-inp" id="sri-r-'+exIdx+'-'+si+'" type="number" placeholder="reps" value="'+(newSet.reps||'')+'" onchange="updateSet('+exIdx+','+si+',\'reps\',this.value)">'+
+      '<div class="sr-lbl">reps</div>'+
+      '<div class="sr-done" id="sr-done-'+exIdx+'-'+si+'" onclick="toggleSetDone('+exIdx+','+si+')">✓</div>';
     container.appendChild(row);
   }
 }
@@ -1151,8 +1144,7 @@ function finishSession(){
   if(history.length>90) history=history.slice(0,90);
   sv('kx6_history',history);
   xp.sessions=(xp.sessions||0)+1;addXP(30);checkAchs();
-  dbSaveSession(history[0]);
-  dbSaveXP();
+  _saveSession(history[0]);_saveXP();
 }
 
 // ═══════════════ CATÁLOGO ═══════════════
@@ -1250,7 +1242,7 @@ function renderRoutine(){
 function delEx(day,idx){routine[day].splice(idx,1);sv('kx6_routine',routine);renderRoutine();renderCatalog();}
 function saveRoutine(){
   if(!Object.values(routine).reduce((a,b)=>a+b.length,0)){alert('Añade al menos un ejercicio.');return;}
-  sv('kx6_routine',routine);document.getElementById('save-ok').style.display='block';renderToday();dbSaveRoutine();
+  sv('kx6_routine',routine);document.getElementById('save-ok').style.display='block';renderToday();_saveRoutine();
 }
 
 // ═══════════════ PROGRESO ═══════════════
@@ -1563,7 +1555,7 @@ function renderAlgo(){
 // ═══════════════ INIT ═══════════════
 window.addEventListener('beforeunload',()=>{if(!sessionSaved&&Object.values(session).some(s=>s.result)) finishSession();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&!sessionSaved&&Object.values(session).some(s=>s.result)) finishSession();});
-dbLoad().finally(()=>{ renderToday();renderFilters();renderCatalog(); });
+_load().finally(function(){renderToday();renderFilters();renderCatalog();});
 </script>
 </body>
 </html>
